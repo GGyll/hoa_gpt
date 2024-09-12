@@ -32,39 +32,16 @@ def extract_text_from_pdf(pdf_path):
 # Initialize the language model
 llm = OpenAI(temperature=0.5)
 
-
-BASE_TEMPLATE = """
-Summarize the key information about the Homeowners Association and its board from page {page_num} of the annual report.
-
-IMPORTANT: If there is info indicating that the numbers are in thousands or millions, please convert them to actual numbers.
-
-
-\n\n{page_content}\n\nSummary:
-
-"""
 # Create prompt templates
 summary_prompt = PromptTemplate(
     input_variables=["page_num", "page_content"],
-    template=BASE_TEMPLATE,
+    template="Summarize the key information about the Homeowners Association and its board from page {page_num} of the annual report:\n\n{page_content}\n\nSummary:",
 )
 
 LOAN_TEMPLATE = """
-Extract and list any information about loans of the association from page {page_num} of the annual report if and only if you find any loan information on that page.
+Extract and list any information about loans of the association from page {page_num} of the annual report if and only if you find any loan information on that page:\n\n{page_content}:
+Look for key terms such as financial institutions, loan amounts, interest rates, and loan terms (and their equivalents in Swedish). If you find any loan information, please provide a summary of the loans found, otherwise, move to the next page.
 
-Instructions:
-1. Look for key terms such as financial institutions, loan amounts, interest rates, and loan terms (and their equivalents in Swedish).
-2. If you find any loan information, provide a concise summary of the loans found.
-3. If you do not find any loan-related information, you must return an empty string without any explanation.
-4. If loan info is found, include an explanation of why you believe it is loan info
-
-IMPORTANT: 
-- Do not say "No loan information found" or any variant of this.
-- Do not apologize or explain the absence of loan information.
-- If you do not find loan information, your response must include the following subtring "5&NOTFOUND"
-- "Fastighetsinteckning" is not loan-related
-
-Page content:
-\n\n{page_content}
 
 
 """
@@ -73,27 +50,9 @@ loans_prompt = PromptTemplate(
     template=LOAN_TEMPLATE,
 )
 
-COMPARISON_TEMPLATE = """
-return a JSON object with a 2D array of the loan information. The first row should be the headers and the subsequent rows should be the loan information.
-
-Here is the header row ["Loan institution", "Loan Amount"]
-
-Match the loan info to the respective headers and return the information in the 2D array format.
-
-If you do not find any loan-related info in the provided text, just return None, do not try to make anything up, it is very important that the information you provide is actually in the supplied text.
-
-IMPORTANT: Do not try to provide any example input or output, just provide the requested information if found.
-
-
-"""
-comparison_prompt = PromptTemplate(
-    input_variables=["loan_info"],
-    template=COMPARISON_TEMPLATE,
-)
 # Create LLMChains
 summary_chain = LLMChain(llm=llm, prompt=summary_prompt)
 loans_chain = LLMChain(llm=llm, prompt=loans_prompt)
-comparison_chain = LLMChain(llm=llm, prompt=comparison_prompt)
 
 
 def analyze_report(pdf_path):
@@ -106,9 +65,7 @@ def analyze_report(pdf_path):
     loan_info = []
     for i, page_content in enumerate(pages, start=1):
         summaries.append(summary_chain.run(page_num=i, page_content=page_content))
-        _loan_info = loans_chain.run(page_num=i, page_content=page_content)
-        if "5&NOTFOUND" not in _loan_info:
-            loan_info.append(_loan_info)
+        loan_info.append(loans_chain.run(page_num=i, page_content=page_content))
 
     # Combine the results
     full_summary = "\n\n".join(
@@ -142,7 +99,6 @@ def main():
 
     print("\nLoan information:")
     print(loans)
-    print(comparison_chain.run(loan_info=loans))
 
 
 if __name__ == "__main__":
