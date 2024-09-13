@@ -2,7 +2,6 @@ import os
 from uuid import uuid4
 
 from flask import Flask, redirect, render_template, request, session
-from flask_cors import CORS
 
 from main import process_question
 
@@ -10,7 +9,6 @@ app = Flask(__name__)
 
 app.secret_key = "grigrjogrjo"
 
-CORS(app, resources={r"/*": {"origins": "*"}})
 
 UPLOAD_FOLDER = "uploads/"
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
@@ -44,27 +42,22 @@ def index():
         session["user_id"] = str(uuid4())
 
     if request.method == "POST":
-        # Check if a file is uploaded
         if "file" in request.files and request.files["file"].filename != "":
             file = request.files["file"]
             file_path = os.path.join(app.config["UPLOAD_FOLDER"], file.filename)
             file.save(file_path)
 
-            # Store file path in session
             session["uploaded_file_path"] = file_path
 
-        # Check if a file path is stored in session
         if "uploaded_file_path" not in session:
-            return redirect(request.url)  # Redirect if no file is uploaded
+            return redirect(request.url)
 
         file_path = session["uploaded_file_path"]
 
-        # Process the question with the uploaded file
         question = request.form["question"]
         conversation_history = get_conversation_history()
         result = process_question(question, conversation_history, file_path)
 
-        print(result)
         add_to_conversation_history(question, result)
 
     return render_template(

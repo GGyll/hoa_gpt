@@ -1,9 +1,7 @@
-import os
 import re
 
 import markdown
 import pymupdf
-from googlemaps import Client as GoogleMaps
 from langchain.tools import BaseTool
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
@@ -13,15 +11,17 @@ from markupsafe import Markup
 llm = ChatOpenAI(model="gpt-4o-mini")
 
 
-gmaps = GoogleMaps(os.getenv("GPLACES_API_KEY"))
-
-
-PREFIX = """
+PROMPT_TEMPLATE = """
 
 You are a tool that leverages OpenAI's API, to extract and summarize key information from an annual report issued by a Homeowners Association (HoA).
 
+When processing any numbers, note if any page in the document mentions whether the numbers are represented in thousands, millions, or billions.
+
 Context:
 HoAs regularly produce annual reports summarizing their activities, financial status, and future plans. These documents are crucial for members, stakeholders, and potential homebuyers but can often be lengthy and complex. Your purpose is to simplify this information when prompted by the user, making it more accessible.
+
+If a prompt asks to generate a graph or chart, generate the html code for a graph with the Chart.js library. Exclude the script tag for chart.js as it is not necessary. Important, just provide the html, no explanation is needed.
+When generating a graph, ONLY return the HTML code required for the map or graph. Do NOT include any additional text, explanations, or descriptions.
 
 """
 
@@ -43,7 +43,7 @@ class PDFExtractorTool(BaseTool):
             return f"An error occurred while extracting the PDF: {str(e)}"
 
 
-system_message = SystemMessage(content=PREFIX)
+system_message = SystemMessage(content=PROMPT_TEMPLATE)
 
 
 pdf_extractor_tool = PDFExtractorTool(
@@ -59,24 +59,6 @@ def extract_and_remove_html(text):
     # Pattern to match HTML code block
     html_pattern = r"```html\s*([\s\S]*?)\s*```"
 
-    # First look for any python code
-    python_pattern = (
-        r'<pre\s+class="codehilite"><code\s+class="language-python">(.*?)</code></pre>'
-    )
-    md_pattern = r"```python(.*?)```"
-    python_match = re.search(python_pattern, text, re.DOTALL | re.IGNORECASE)
-    md_match = re.search(md_pattern, text, re.DOTALL)
-    code_match = python_match or md_match
-    if code_match:
-        print(text)
-        code = code_match.group(1)
-        code = code.replace("&quot;", '"')
-        code = code.replace("&amp;", "&")
-        code = code.replace("&lt;", "<")
-        code = code.replace("&gt;", ">")
-        code = code.replace("&#39;", "'")
-        return None, "PDF Generated!", code
-
     # Search for the pattern in the text
     match = re.search(html_pattern, text, re.IGNORECASE)
 
@@ -88,10 +70,10 @@ def extract_and_remove_html(text):
         text_without_html = re.sub(html_pattern, "", text, flags=re.IGNORECASE).strip()
 
         # Return both the extracted HTML and the text without HTML
-        return Markup(html_code), text_without_html, False
+        return Markup(html_code), text_without_html
     else:
         # If no HTML is found, return None for HTML and the original text
-        return None, text, False
+        return None, text
 
 
 def process_markdown(text):
@@ -126,8 +108,9 @@ def process_question(prompted_question, conversation_history, pdf_path):
     content = []
     for s in agent_executor.stream({"messages": [HumanMessage(content=prompt)]}):
         for msg in s.get("agent", {}).get("messages", []):
-            print(msg.content)
-            content.append(process_markdown(msg.content))
-        print("----")
+            html, stripped_text = extract_and_remove_html(msg.content)
+            content.append(process_markdown(stripped_text))
+            if html:
+                content.append(html)
 
     return content

@@ -8,7 +8,7 @@
       src="https://maps.googleapis.com/maps/api/js?key={{gmaps_api_key}}&loading=async&libraries=maps,marker&v=beta"
       defer
     ></script>
-    <title>HOAGPT</title>
+    <title>HOALogic</title>
 
     <style>
       body {
@@ -112,7 +112,14 @@
   </head>
   <body>
     <div class="container">
-      <h1>HOAGPT</h1>
+      <image
+        src="{{ url_for('static', filename='images/logo.webp') }}"
+        style="margin: 0 auto; border-radius: 50%; shadow: 0 0 10px #000"
+        alt="HOAGPT Logo"
+        width="200"
+        height="200"
+      />
+      <h1>HOALogic</h1>
       <form method="post" enctype="multipart/form-data">
         <input type="text" name="question" placeholder="Enter your question" />
         <label for="file">Upload HOA Report (PDF):</label>
